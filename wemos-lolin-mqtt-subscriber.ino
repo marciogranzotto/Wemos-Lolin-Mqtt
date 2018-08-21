@@ -151,8 +151,6 @@ void loop()
       //this means that the last line will be out of the display
       freeSpace = 0;
     }
-//    Serial.print("freeSpace size: ");
-//    Serial.println(freeSpace);
     int line2Y = displayData.line1Size + freeSpace/2;
     int line3Y = displayData.line2Size + line2Y + freeSpace/2;
     
