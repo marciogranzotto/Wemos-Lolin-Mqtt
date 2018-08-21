@@ -19,6 +19,7 @@
 #define CLIENT_ID "esp32_display"
 #define WIFI_SSID "my_wifi"
 #define WIFI_PASS "my_secret_password"
+#define SHOULD_FLIP_SCREEN false
 /////////////////////////////////////////
 
 #define OLED_HEIGHT 64
@@ -92,7 +93,9 @@ void setup()
   delay(10);
 
   display.init();
-//  display.flipScreenVertically();
+  if (SHOULD_FLIP_SCREEN) {
+    display.flipScreenVertically();
+  }
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(Roboto_Condensed_16);
 
