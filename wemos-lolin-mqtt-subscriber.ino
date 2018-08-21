@@ -1,13 +1,6 @@
-//#include <Adafruit_SSD1306.h>
-
-/*
-    This sketch sends a message to a TCP server
-
-*/
-
- #include <Wire.h>
- #include "SSD1306.h"
- #include "RobotoFonts.h"
+#include <Wire.h>
+#include "SSD1306.h"
+#include "RobotoFonts.h"
 
 #include <WiFi.h>
 #include <WiFiMulti.h>
@@ -28,14 +21,25 @@
 #define WIFI_PASS "my_secret_password"
 /////////////////////////////////////////
 
+#define OLED_HEIGHT 64
+
 SSD1306  display(0x3c, 5, 4);
 WiFiMulti WiFiMulti;
 WiFiClient wclient;
 PubSubClient clientMQTT(wclient);
 
-String value = "R$ 0,00";
-String percentage = "0.00%";
 boolean shouldUpdateUI = false;
+
+struct DisplayData {
+  const char* line1;
+  const char* line2;
+  const char* line3;
+  int line1Size;
+  int line2Size;
+  int line3Size;
+};
+
+DisplayData displayData = {"--", "--", "--", 10, 16, 24};
 
 void callback(char* topic, byte* payload, unsigned int length) {
   // handle message arrived
@@ -51,27 +55,26 @@ void callback(char* topic, byte* payload, unsigned int length) {
   
   JsonObject& root = jsonBuffer.parseObject(inData);
 
-  // Pull the value from key "VALUE" from the JSON message {"value": 1 , "someOtherValue" : 200}
-  const char* val = root["value"];
-  const char* perc = root["percentage"];
-  value = String("R$ ") + String(val);
-  percentage = String(perc) + String("%");
-  shouldUpdateUI = true;
+  const char* line1 = root["line1"];
+  const char* line2 = root["line2"];
+  const char* line3 = root["line3"];
+  int line1Size = root["line1Size"];
+  int line2Size = root["line2Size"];
+  int line3Size = root["line3Size"];
 
-  Serial.println(val);
+  displayData = {line1, line2, line3, line1Size, line2Size, line3Size};
+  
+  shouldUpdateUI = true;
 }
 
 void reconnect() {
   // Loop until we're reconnected
   while (!clientMQTT.connected()) {
     Serial.print("Attempting MQTT connection...");
-    // Create a random client ID
     // Attempt to connect
     if (clientMQTT.connect(CLIENT_ID)) {
       Serial.println("connected");
-      // Once connected, publish an announcement...
-      clientMQTT.publish("outTopic", "hello world");
-      // ... and resubscribe
+      // subscribe to the topic
       clientMQTT.subscribe(TOPIC);
     } else {
       Serial.print("failed, rc=");
@@ -142,17 +145,41 @@ void loop()
 
   if(shouldUpdateUI) {
     shouldUpdateUI = false;
-    Serial.println("Printing on the display: " + value + " and " + percentage);
+
+    int freeSpace = OLED_HEIGHT - (displayData.line1Size + displayData.line2Size + displayData.line3Size);
+    if (freeSpace < 0) {
+      //this means that the last line will be out of the display
+      freeSpace = 0;
+    }
+//    Serial.print("freeSpace size: ");
+//    Serial.println(freeSpace);
+    int line2Y = displayData.line1Size + freeSpace/2;
+    int line3Y = displayData.line2Size + line2Y + freeSpace/2;
     
     display.clear();
     display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.setFont(Roboto_Condensed_10);
-    display.drawString(0, 0, "Current Balance");
-    display.setFont(Roboto_Condensed_16);
-    display.drawString(0, 10, percentage);
-    display.setFont(Roboto_Condensed_24);
-    display.drawString(0, 26, value);
+    
+    display.setFont(getFontForSize(displayData.line1Size));
+    display.drawString(0, 0, displayData.line1);
+    
+    display.setFont(getFontForSize(displayData.line2Size));
+    display.drawString(0, line2Y, displayData.line2);
+    
+    display.setFont(getFontForSize(displayData.line3Size));
+    display.drawString(0, line3Y, displayData.line3);
+    
     display.display();
+  }
+}
+
+const unsigned char* getFontForSize(int fontSize) {
+  switch (fontSize) {
+    case 10:
+      return Roboto_Condensed_10;
+    case 24:
+      return Roboto_Condensed_24;
+    default:
+      return Roboto_Condensed_16;
   }
 }
 
