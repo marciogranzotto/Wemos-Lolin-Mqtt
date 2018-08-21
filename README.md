@@ -1,5 +1,7 @@
 # Wemos-Lolin-Mqtt
 
+![Project Image](https://i.imgur.com/SDDD0ZT.jpg)
+
 This is a simple project that displays text on a Wemos LOLIN32 with a integrated 128x64 OLED display.
 It uses MQTT messages to change the content of the display.
 
@@ -32,3 +34,5 @@ Your MQTT message should have this format:
 ```
 
 The font sizes supported are: `10,16,24`. Any other value will be defaulted to 16.
+
+I use it for monitoring my crypto portfolio, but you can use for anything you want!
