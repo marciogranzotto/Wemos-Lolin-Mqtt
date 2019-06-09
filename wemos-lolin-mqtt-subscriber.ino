@@ -149,6 +149,7 @@ void loop() {
     reconnect();
   }
   clientMQTT.loop();
+  buttonEvent.loop();
 
   long sensorTriggerAgo = (long)(micros() - motionSensorLastTriggeredInMicros);
   if (HAS_MOTION_SENSOR && sensorIsOff && sensorTriggerAgo > (SECONDS_TO_TURN_OFF * 1000000)) {
@@ -198,6 +199,11 @@ void parseJsonForCurrentPage() {
   displayData = {line1, line2, line3, line1Size, line2Size, line3Size};
 }
 
+int lastPageNumer() {
+  JsonArray pages = jsonObject["pages"];
+  return pages.size();
+}
+
 int parseSize(int intendedSize) {
   switch (intendedSize) {
     case 10:
@@ -221,8 +227,15 @@ const unsigned char* getFontForSize(int fontSize) {
 }
 
 void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length) {
-  Serial.println("Button Triggered!");
-  // TODO
+  if (event == EVENT_PRESSED) {
+    currentPage++;
+    if (currentPage >= lastPageNumer()) {
+      currentPage = 0;
+    }
+    // we should also reset the motion timer, since you are clicking the buttonEvent
+    motionSensorLastTriggeredInMicros = micros();
+    shouldUpdateUI = true;
+  }
 }
 
 void motionSensorTriggered() {
