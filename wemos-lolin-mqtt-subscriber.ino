@@ -55,7 +55,7 @@ void reconnect();
 
 DisplayData displayData = {"--", "--", "--", 10, 16, 24};
 volatile boolean shouldUpdateUI = true; // CHANGE BACK TO false
-volatile boolean isScreenOn = true;
+volatile boolean sensorIsOff = true;
 volatile int currentPage = 0;
 volatile unsigned long motionSensorLastTriggeredInMicros;
 DynamicJsonDocument jsonObject(JSON_BUFFER_SIZE);
@@ -151,7 +151,7 @@ void loop() {
   clientMQTT.loop();
 
   long sensorTriggerAgo = (long)(micros() - motionSensorLastTriggeredInMicros);
-  if (sensorTriggerAgo > (SECONDS_TO_TURN_OFF * 1000000)) {
+  if (HAS_MOTION_SENSOR && sensorIsOff && sensorTriggerAgo > (SECONDS_TO_TURN_OFF * 1000000)) {
     display.displayOff();
     return;
   }
@@ -231,6 +231,10 @@ void motionSensorTriggered() {
   Serial.println(digitalRead(SENSOR_PIN));
 
   if (digitalRead(SENSOR_PIN) == HIGH) {
+    sensorIsOff = false;
+    shouldUpdateUI = true;
+  } else {
+    sensorIsOff = true;
     Serial.println("Updating Sensor timestamp");
     motionSensorLastTriggeredInMicros = micros();
     shouldUpdateUI = true;
