@@ -130,12 +130,7 @@ void setup() {
   display.drawString(0, 32, "Waiting for messages...");
   display.display();
   Serial.println("Waiting for messages...");
-
-  // if (HAS_BUTTON) {
-    // pinMode(BUTTON_PIN, INPUT_PULLUP);
-    // attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonTriggered, CHANGE);
-  // }
-
+  
   if (HAS_MOTION_SENSOR) {
     pinMode(SENSOR_PIN, INPUT);
     attachInterrupt(SENSOR_PIN, motionSensorTriggered, CHANGE);
@@ -227,7 +222,7 @@ const unsigned char* getFontForSize(int fontSize) {
 }
 
 void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length) {
-  if (event == EVENT_PRESSED) {
+  if (event == EVENT_PRESSED && HAS_BUTTON) {
     currentPage++;
     if (currentPage >= lastPageNumer()) {
       currentPage = 0;
