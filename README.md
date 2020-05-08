@@ -7,7 +7,7 @@ It uses MQTT messages to change the content of the display.
 
 ## Bill of Materials
 
-- [Wemos LOLIN32 with integrated OLED display](https://www.aliexpress.com/wholesale?catId=0&initiative_id=&SearchText=wemos+esp32+oled)
+- [Wemos LOLIN32 with integrated OLED display](https://s.click.aliexpress.com/e/_d7c49Vr)
 
 ## Configuration
 
