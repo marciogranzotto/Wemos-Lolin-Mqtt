@@ -11,35 +11,41 @@
 /////////////////////////////////////////
 // CHANGE TO MATCH YOUR CONFIGURATION  //
 /////////////////////////////////////////
+#define WIFI_SSID "my_wifi"
+#define WIFI_PASS "my_password"
+
 #define BROKER "192.168.0.1"
 #define BROKER_PORT 1883
-#define TOPIC "home/lolin/display"
-#define MQTT_USER "user"
-#define MQTT_PASS "admin"
-#define CLIENT_ID "esp32_display"
-#define WIFI_SSID "my_wifi"
-#define WIFI_PASS "my_secret_password"
-#define SHOULD_FLIP_SCREEN false
-#define HAS_BUTTON true
-#define HAS_MOTION_SENSOR false
+#define MQTT_USER "my_mqtt_user"
+#define MQTT_PASS "my_mqtt_password"
+#define CLIENT_ID "esp32_display_0" // has to be unique on your broker
+
+#define TOPIC "display/wemos/0"
+#define ALIGN_TOPIC TOPIC "/align_right"
+
+#define SHOULD_FLIP_SCREEN false // flips the screen vertically
+#define INVERT_COLORS false // if true: white background with black text
+
+#define BUTTON_PIN 0 // comment out if you don't have a button
+// #define SENSOR_PIN 15 // uncomment if you have a motion sensor
+#ifdef SENSOR_PIN
 #define SECONDS_TO_TURN_OFF 60
-#define INVERT_COLORS false
+#endif
 /////////////////////////////////////////
 
-#define ALIGN_TOPIC TOPIC "/align_right"
+// Only change this if you have a diferent display size
 #define OLED_HEIGHT 64
 #define OLED_WIDTH 128
+
+// Bumped the packat size so it supports larger messages.
+// If you are sending huge messages and your display stops updating,
+// you can try to increase it
 #define MQTT_PACKET_SIZE 1024
 #define JSON_BUFFER_SIZE MQTT_PACKET_SIZE
 
-#if defined(HAS_BUTTON) && HAS_BUTTON
-#define BUTTON_PIN 0
+#ifdef BUTTON_PIN
 void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length);
 DebounceEvent buttonEvent = DebounceEvent(BUTTON_PIN, buttonTriggered, BUTTON_PUSHBUTTON | BUTTON_DEFAULT_HIGH | BUTTON_SET_PULLUP);
-#endif
-
-#if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
-#define SENSOR_PIN 15
 #endif
 
 struct DisplayData {
@@ -168,7 +174,7 @@ void setup() {
   display.display();
   Serial.println("Waiting for messages...");
 
-  #if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
+  #ifdef SENSOR_PIN
   pinMode(SENSOR_PIN, INPUT);
   attachInterrupt(SENSOR_PIN, motionSensorTriggered, CHANGE);
 
@@ -183,11 +189,11 @@ void loop() {
   }
   clientMQTT.loop();
 
-  #if defined(HAS_BUTTON) && HAS_BUTTON
+  #ifdef BUTTON_PIN
   buttonEvent.loop();
   #endif
 
-  #if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
+  #ifdef SENSOR_PIN
   long sensorTriggerAgo = (long)(micros() - motionSensorLastTriggeredInMicros);
   if (sensorIsOff && sensorTriggerAgo > (SECONDS_TO_TURN_OFF * 1000000)) {
     display.displayOff();
@@ -274,9 +280,9 @@ const unsigned char* getFontForSize(int fontSize) {
   }
 }
 
-#if defined(HAS_BUTTON) && HAS_BUTTON
+#ifdef BUTTON_PIN
 void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length) {
-  if (event == EVENT_PRESSED && HAS_BUTTON) {
+  if (event == EVENT_PRESSED) {
     currentPage++;
     if (currentPage >= lastPageNumer()) {
       currentPage = 0;
@@ -289,7 +295,7 @@ void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length)
 #endif
 
 
-#if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
+#ifdef SENSOR_PIN
 void motionSensorTriggered() {
   Serial.println("Sensor Triggered!");
   Serial.println("Sensor state: ");
