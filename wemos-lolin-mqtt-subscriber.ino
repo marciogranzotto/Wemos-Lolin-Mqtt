@@ -1,9 +1,8 @@
 #include <Wire.h>
-#include "SSD1306.h"
+#include <SSD1306.h>
 #include "RobotoFonts.h"
 
 #include <WiFi.h>
-#include <WiFiMulti.h>
 #include <PubSubClient.h>
 #include <string.h>
 #include <ArduinoJson.h>
@@ -22,18 +21,26 @@
 #define WIFI_PASS "my_secret_password"
 #define SHOULD_FLIP_SCREEN false
 #define HAS_BUTTON true
-#define HAS_MOTION_SENSOR true
-#define SECONDS_TO_TURN_OFF 3
+#define HAS_MOTION_SENSOR false
+#define SECONDS_TO_TURN_OFF 60
+#define INVERT_COLORS false
 /////////////////////////////////////////
 
+#define ALIGN_TOPIC TOPIC "/align_right"
 #define OLED_HEIGHT 64
-#define SENSOR_PIN 15
-#define BUTTON_PIN 13
-#define JSON_BUFFER_SIZE MQTT_MAX_PACKET_SIZE
+#define OLED_WIDTH 128
+#define MQTT_PACKET_SIZE 1024
+#define JSON_BUFFER_SIZE MQTT_PACKET_SIZE
 
-// Comment this out if you don't have a button
+#if defined(HAS_BUTTON) && HAS_BUTTON
+#define BUTTON_PIN 0
 void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length);
 DebounceEvent buttonEvent = DebounceEvent(BUTTON_PIN, buttonTriggered, BUTTON_PUSHBUTTON | BUTTON_DEFAULT_HIGH | BUTTON_SET_PULLUP);
+#endif
+
+#if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
+#define SENSOR_PIN 15
+#endif
 
 struct DisplayData {
   const char* line1;
@@ -45,7 +52,6 @@ struct DisplayData {
 };
 
 SSD1306  display(0x3c, 5, 4);
-WiFiMulti WiFiMulti;
 WiFiClient wclient;
 PubSubClient clientMQTT(wclient);
 
@@ -54,31 +60,57 @@ void motionSensorTriggered();
 void reconnect();
 
 DisplayData displayData = {"--", "--", "--", 10, 16, 24};
-volatile boolean shouldUpdateUI = true; // CHANGE BACK TO false
+volatile boolean shouldUpdateUI = false;
 volatile boolean sensorIsOff = true;
+volatile boolean align_right = false;
 volatile int currentPage = 0;
 volatile unsigned long motionSensorLastTriggeredInMicros;
 DynamicJsonDocument jsonObject(JSON_BUFFER_SIZE);
 
 void callback(char* topic, byte* payload, unsigned int length) {
   // handle message
-  Serial.println("callback called!");
-
-  char* charPayload = (char*)payload;
-  Serial.print("payload: ");
-  for (int i = 0; i < length; i++) {
-    Serial.print(charPayload[i]);
-  }
+  Serial.println("\n\ncallback called!");
+  Serial.print("length: ");
+  Serial.println(length);
+  String topicStr = String(topic);
+  Serial.print("Message arrived [");
+  Serial.print(topicStr);
+  Serial.print("] ");
   Serial.println();
 
-  DeserializationError error = deserializeJson(jsonObject, charPayload);
-  if (error) {
-    Serial.println("deserializeJson() failed: ");
-    Serial.println(error.c_str());
+  char charPayload[length+1];
+  Serial.print("payload: ");
+  for (int i = 0; i < length; i++) {
+    charPayload[i] = (char)payload[i];
+    Serial.print(charPayload[i]);
+  }
+  charPayload[length] = '\0';
+
+
+  if (topicStr == ALIGN_TOPIC) {
+    Serial.println("parsing alignment!");
+    String payloadStr = String(charPayload);
+    align_right = payloadStr == "true";
+    Serial.print("Align Right: ");
+    Serial.print(align_right);
+    Serial.print(" vs ");
+    Serial.println(payloadStr);
+    shouldUpdateUI = true;
     return;
   }
 
-  shouldUpdateUI = true;
+  if (topicStr == TOPIC) {
+    Serial.println("deserializing Json!");
+    DeserializationError error = deserializeJson(jsonObject, (const char*) charPayload);
+    if (error) {
+      Serial.println("deserializeJson() failed: ");
+      Serial.println(error.c_str());
+      return;
+    }
+    Serial.println("success!");
+    shouldUpdateUI = true;
+    return;
+  }
 }
 
 void setup() {
@@ -89,11 +121,15 @@ void setup() {
   if (SHOULD_FLIP_SCREEN) {
     display.flipScreenVertically();
   }
+  if (INVERT_COLORS) {
+    display.invertDisplay();
+  }
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(Roboto_Condensed_16);
 
   // We start by connecting to a WiFi network
-  WiFiMulti.addAP(WIFI_SSID, WIFI_PASS);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   Serial.println();
   Serial.println();
@@ -102,7 +138,7 @@ void setup() {
   display.display();
   Serial.print("Waiting for WiFi...");
 
-  while (WiFiMulti.run() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
   }
@@ -122,6 +158,7 @@ void setup() {
   // set MQTT broker and connect
   clientMQTT.setServer(BROKER, BROKER_PORT);
   clientMQTT.setCallback(callback);
+  clientMQTT.setBufferSize(MQTT_PACKET_SIZE);
   display.clear();
   display.drawString(0, 0, "Connecting to broker...");
   display.display();
@@ -130,13 +167,14 @@ void setup() {
   display.drawString(0, 32, "Waiting for messages...");
   display.display();
   Serial.println("Waiting for messages...");
-  
-  if (HAS_MOTION_SENSOR) {
-    pinMode(SENSOR_PIN, INPUT);
-    attachInterrupt(SENSOR_PIN, motionSensorTriggered, CHANGE);
-  }
+
+  #if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
+  pinMode(SENSOR_PIN, INPUT);
+  attachInterrupt(SENSOR_PIN, motionSensorTriggered, CHANGE);
 
   motionSensorLastTriggeredInMicros = micros();
+  #endif
+
 }
 
 void loop() {
@@ -144,18 +182,24 @@ void loop() {
     reconnect();
   }
   clientMQTT.loop();
-  buttonEvent.loop();
 
+  #if defined(HAS_BUTTON) && HAS_BUTTON
+  buttonEvent.loop();
+  #endif
+
+  #if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
   long sensorTriggerAgo = (long)(micros() - motionSensorLastTriggeredInMicros);
-  if (HAS_MOTION_SENSOR && sensorIsOff && sensorTriggerAgo > (SECONDS_TO_TURN_OFF * 1000000)) {
+  if (sensorIsOff && sensorTriggerAgo > (SECONDS_TO_TURN_OFF * 1000000)) {
     display.displayOff();
     return;
   }
+  #endif
 
   display.displayOn();
 
-  if(shouldUpdateUI) {
-  Serial.println("Updating UI");
+  if (shouldUpdateUI) {
+    Serial.println("\n\nUpdating UI");
+    serializeJson(jsonObject, Serial);
     shouldUpdateUI = false;
     parseJsonForCurrentPage();
     int freeSpace = OLED_HEIGHT - (displayData.line1Size + displayData.line2Size + displayData.line3Size);
@@ -163,20 +207,29 @@ void loop() {
       //this means that the last line will be out of the display
       freeSpace = 0;
     }
-    int line2Y = displayData.line1Size + freeSpace/2;
-    int line3Y = displayData.line2Size + line2Y + freeSpace/2;
+    int line2Y = displayData.line1Size + freeSpace / 2;
+    int line3Y = displayData.line2Size + line2Y + freeSpace / 2;
 
     display.clear();
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-
+    int x = 0;
+    if (align_right) {
+      display.setTextAlignment(TEXT_ALIGN_RIGHT);
+      x = OLED_WIDTH;
+    } else {
+      display.setTextAlignment(TEXT_ALIGN_LEFT);
+      x = 0;
+    }
     display.setFont(getFontForSize(displayData.line1Size));
-    display.drawString(0, 0, displayData.line1);
+    display.drawString(x, 0, displayData.line1);
+    Serial.println(displayData.line1);
 
     display.setFont(getFontForSize(displayData.line2Size));
-    display.drawString(0, line2Y, displayData.line2);
+    display.drawString(x, line2Y, displayData.line2);
+    Serial.println(displayData.line2);
 
     display.setFont(getFontForSize(displayData.line3Size));
-    display.drawString(0, line3Y, displayData.line3);
+    display.drawString(x, line3Y, displayData.line3);
+    Serial.println(displayData.line3);
 
     display.display();
   }
@@ -202,25 +255,26 @@ int lastPageNumer() {
 int parseSize(int intendedSize) {
   switch (intendedSize) {
     case 10:
-      return 10;
+    return 10;
     case 24:
-      return 24;
+    return 24;
     default:
-      return 16;
+    return 16;
   }
 }
 
 const unsigned char* getFontForSize(int fontSize) {
   switch (fontSize) {
     case 10:
-      return Roboto_Condensed_10;
+    return Roboto_Condensed_10;
     case 24:
-      return Roboto_Condensed_24;
+    return Roboto_Condensed_24;
     default:
-      return Roboto_Condensed_16;
+    return Roboto_Condensed_16;
   }
 }
 
+#if defined(HAS_BUTTON) && HAS_BUTTON
 void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length) {
   if (event == EVENT_PRESSED && HAS_BUTTON) {
     currentPage++;
@@ -232,7 +286,10 @@ void buttonTriggered(uint8_t pin, uint8_t event, uint8_t count, uint16_t length)
     shouldUpdateUI = true;
   }
 }
+#endif
 
+
+#if defined(HAS_MOTION_SENSOR) && HAS_MOTION_SENSOR
 void motionSensorTriggered() {
   Serial.println("Sensor Triggered!");
   Serial.println("Sensor state: ");
@@ -248,16 +305,24 @@ void motionSensorTriggered() {
     shouldUpdateUI = true;
   }
 }
+#endif
 
 void reconnect() {
   // Loop until we're reconnected
   while (!clientMQTT.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (clientMQTT.connect(CLIENT_ID)) {
+
+    clientMQTT.setCallback(callback);
+    if (clientMQTT.connect(CLIENT_ID, MQTT_USER, MQTT_PASS)) {
       Serial.println("connected");
       // subscribe to the topic
-      clientMQTT.subscribe(TOPIC);
+      clientMQTT.subscribe(TOPIC, 1);
+      Serial.print("subscribed to ");
+      Serial.println(TOPIC);
+      clientMQTT.subscribe(ALIGN_TOPIC, 1);
+      Serial.print("subscribed to ");
+      Serial.println(ALIGN_TOPIC);
     } else {
       Serial.print("failed, rc=");
       Serial.print(clientMQTT.state());
