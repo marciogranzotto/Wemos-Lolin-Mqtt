@@ -9,7 +9,9 @@ It uses MQTT messages to change the content of the display.
 
 - [Wemos LOLIN32 with integrated OLED display](https://s.click.aliexpress.com/e/_d7c49Vr)
 
-## Configuration
+## Getting started
+Just download the files and open them in the Arduino IDE.
+You may need to install the ESP32 board definitions.
 
 You have to change the definitions on the start of the code with your WiFi and MQTT broker information. Check the comment block:
 ```c++
@@ -17,6 +19,8 @@ You have to change the definitions on the start of the code with your WiFi and M
 // CHANGE TO MATCH YOUR CONFIGURATION  //
 /////////////////////////////////////////
 ```
+
+After that just flash it to the board.
 
 ## Usage
 
